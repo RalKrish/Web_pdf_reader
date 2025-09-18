@@ -9,7 +9,8 @@ export async function GET(req) {
   try {
     const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
     const data = await res.json();
-    console.log('line 12', data[0]?.meanings[0]);
+    console.log('line 12',word, data);
+    console.log('line 13',word, data[0]?.meanings[0]);
     const meaning = data[0]?.meanings[0]?.definitions[0]?.definition || "Not found";
 
     return new Response(JSON.stringify({ meaning }), {

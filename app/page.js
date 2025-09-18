@@ -10,6 +10,7 @@ export default function Home() {
   const [tooltip, setTooltip] = useState({ word: "", x: 0, y: 0, show: false });
   const [pdfDoc, setPdfDoc] = useState(null);
   const [highlightedWord, setHighlightedWord] = useState("");
+  const [openAccordion, setOpenAccordion] = useState(null); // track which letter is open
 
   useEffect(() => {
     const script = document.createElement("script");
@@ -37,7 +38,6 @@ export default function Home() {
     reader.readAsArrayBuffer(file);
   }
 
-  // Add at the top, below imports
   const STOP_WORDS = new Set([
     "a",
     "an",
@@ -153,10 +153,7 @@ export default function Home() {
     "someone",
     "something",
     "nothing",
-    "something",
-    "nothing",
     "everybody",
-    "someone",
     "anybody",
     "who",
     "whom",
@@ -194,8 +191,6 @@ export default function Home() {
     // Extract text and words
     const textContent = await page.getTextContent();
     const wordsSet = new Set();
-
-    // Save positions for highlights
     const wordPositions = [];
 
     textContent.items.forEach((item) => {
@@ -204,11 +199,10 @@ export default function Home() {
         .split(" ")
         .filter(Boolean)
         .map((w) => w.toLowerCase())
-        .filter((w) => !STOP_WORDS.has(w)); // remove common words
+        .filter((w) => !STOP_WORDS.has(w));
 
       splitWords.forEach((w) => wordsSet.add(w));
 
-      // Save positions for highlight
       const transform = item.transform;
       splitWords.forEach((w) => {
         wordPositions.push({
@@ -223,12 +217,10 @@ export default function Home() {
 
     setPageWords(Array.from(wordsSet).sort((a, b) => a.localeCompare(b)));
 
-    // Draw highlight if any
     if (highlightedWord) {
       highlightWordOnCanvas(highlightedWord, wordPositions, ctx);
     }
 
-    // Attach word positions for future highlights
     canvas.wordPositions = wordPositions;
   }
 
@@ -247,14 +239,11 @@ export default function Home() {
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Re-render page to redraw canvas
     renderPage(pdfDoc, currentPage);
 
-    // Highlight clicked word
     const positions = canvas.wordPositions || [];
     highlightWordOnCanvas(word, positions, ctx);
 
-    // Show tooltip
     const rect = canvas.getBoundingClientRect();
     setTooltip({
       word,
@@ -262,6 +251,10 @@ export default function Home() {
       y: rect.y + 20,
       show: true,
     });
+    setTimeout(() => {
+      setTooltip((prev) => ({ ...prev, show: false }));
+    }, 6000);
+
     if (!meanings[word]) fetchMeaning(word);
   }
 
@@ -283,27 +276,49 @@ export default function Home() {
     if (pdfDoc && currentPage > 1) renderPage(pdfDoc, currentPage - 1);
   };
 
+  // group words by first letter
+  const groupedWords = pageWords.reduce((acc, word) => {
+    const firstLetter = word[0].toUpperCase();
+    if (!acc[firstLetter]) acc[firstLetter] = [];
+    acc[firstLetter].push(word);
+    return acc;
+  }, {});
+
   return (
-    <div style={{ display: "flex", height: "90vh" }}>
-      <div style={{ flex: 2, position: "relative" }}>
+    <div style={{ display: "flex", height: "100%", background: "#f7f7f7" }}>
+      {/* Left: PDF Viewer */}
+      <div
+        style={{
+          width: "75%",
+          position: "relative",
+          background: "#f7f7f7",
+          height: "100%",
+        }}
+      >
         <input
           type="file"
           accept="application/pdf"
           onChange={handleFileUpload}
+          className="font-bold text-blue-500 border border-blue-500
+          rounded-md px-2 py-1 bg-white hover:bg-blue-500
+           hover:text-white transition duration-300 ease-in-out cursor-pointer"
         />
         <div
           style={{
             marginTop: "10px",
-            background: "#f0f0f0",
+            background: "#f7f7f7",
             display: "flex",
-            justifyContent: "center",
+            justifyContent: "start",
+            position: "sticky",
+            top: 0,
+            zIndex: 1,
           }}
         >
           <span style={{ marginLeft: "10px" }}>
             Page: {currentPage}/{pdfDoc ? pdfDoc.numPages : 0}
           </span>
 
-          <div className="ml-5 flex w-[200px] bg-amber-200 justify-around items-end">
+          <div className="ml-5 flex w-[100px] bg-amber-200 justify-around items-end">
             <div>
               <button onClick={prevPage} disabled={currentPage === 1}>
                 Prev
@@ -323,10 +338,13 @@ export default function Home() {
           id="pdfContainer"
           style={{
             flex: 1,
+            display: "flex",
             overflow: "auto",
-            border: "1px solid #ccc",
+            border: "6px solid #ccc",
             position: "relative",
-            marginTop: "10px",
+            marginTop: "2px",
+            background: "#f7f7f7",
+            justifyContent: "center",
           }}
         ></div>
 
@@ -337,7 +355,7 @@ export default function Home() {
               left: tooltip.x,
               top: tooltip.y,
               background: "#fff",
-              border: "1px solid #333",
+              border: "1px solid #3lop3",
               padding: "5px",
               borderRadius: "4px",
               zIndex: 1000,
@@ -351,37 +369,91 @@ export default function Home() {
         )}
       </div>
 
-      {/* Right side: page words in 4 cols, scrollable */}
+      {/* Right: Accordion words */}
       <div
         style={{
-          flex: 1,
+          width: "32%",
           border: "2px solid #888",
-          padding: "10px",
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "2px",
-          overflowY: "auto",
+          padding: "1",
+          overflowY: "none",
           height: "100vh",
+          background: "#f7f7f7",
+          position: "sticky",
+          top: 0,
+          display: "flex",
+          flexDirection: "column",
+          flexWrap: "wrap",
+          gap: "4px",
+          alignContent: "start",
+          justifyContent: "flex-start",
         }}
       >
-        {pageWords.map((word) => (
-          <div
-            key={word}
-            style={{
-              border: "1px solid #ccc",
-              borderRadius: "3px",
-              textAlign: "start",
-              cursor: "pointer",
-              background: "#f7f7f7",
-            }}
-            onClick={() => {
-              setHighlightedWord(word);
-              handleWordClick(word);
-            }}
-          >
-            {word}
-          </div>
-        ))}
+        {Object.keys(groupedWords)
+          .sort()
+          .map((letter) => (
+            <div
+              key={letter}
+              style={{
+                border: "1px solid #ccc",
+                marginBottom: "4px",
+                borderRadius: "4px",
+                background: "#eee",
+                width: "20%",
+                display: "flex",
+              }}
+            >
+              {/* Accordion Header */}
+              <div
+                style={{
+                  padding: "8px",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+
+                  background: openAccordion === letter ? "#ddd" : "#f2f2f2",
+                }}
+                onClick={() =>
+                  setOpenAccordion(openAccordion === letter ? null : letter)
+                }
+              >
+                {letter}
+              </div>
+
+              {/* Accordion Content */}
+              {openAccordion === letter && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(4, 1fr)",
+                    gap: "4px",
+                    padding: "4px",
+                    background: "#fff",
+                    zIndex: 180,
+                  }}
+                >
+                  {groupedWords[letter].map((word) => (
+                    <div
+                      key={word}
+                      style={{
+                        border: "1px solid #ccc",
+                        borderRadius: "3px",
+                        textAlign: "start",
+                        width: "fit-content",
+                        cursor: "pointer",
+                        background: "#FFCCCB",
+                        padding: "2px 4px",
+                      }}
+                      onClick={() => {
+                        setHighlightedWord(word);
+                        handleWordClick(word);
+                      }}
+                    >
+                      {word}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
       </div>
     </div>
   );
