@@ -233,7 +233,7 @@ export default function Home() {
     });
   }
 
-  function handleWordClick(word) {
+  function handleWordClick(word,e) {
     const canvas = document.getElementById("pdfCanvas");
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -244,11 +244,11 @@ export default function Home() {
     const positions = canvas.wordPositions || [];
     highlightWordOnCanvas(word, positions, ctx);
 
-    const rect = canvas.getBoundingClientRect();
+    const rect = e.target.getBoundingClientRect(); // where you clicked
     setTooltip({
       word,
-      x: rect.x + rect.width / 2,
-      y: rect.y + 20,
+      x: rect.right -25, // show tooltip just beside clicked word
+      y: rect.top,
       show: true,
     });
     setTimeout(() => {
@@ -258,10 +258,26 @@ export default function Home() {
     if (!meanings[word]) fetchMeaning(word);
   }
 
+useEffect(() => {
+  function handleOutsideClick(e) {
+    // if tooltip is showing and click not inside it, hide
+    console.log("line 264 tooltip.show");
+    const tooltipEl = document.getElementById("tooltip-box");
+    if (tooltip.show && tooltipEl && !tooltipEl.contains(e.target)) {
+      setTooltip((prev) => ({ ...prev, show: false }));
+    }
+  }
+
+  document.addEventListener("mousedown", handleOutsideClick);
+  return () => document.removeEventListener("mousedown", handleOutsideClick);
+}, [tooltip.show]);
+
+
   async function fetchMeaning(word) {
     try {
       const res = await fetch(`/api/lookup?word=${word}`);
       const data = await res.json();
+      console.log("data line 265", data);
       setMeanings((prev) => ({ ...prev, [word]: data.meaning || "Not found" }));
     } catch {
       setMeanings((prev) => ({ ...prev, [word]: "Error fetching meaning" }));
@@ -290,7 +306,7 @@ export default function Home() {
       <div
         style={{
           width: "75%",
-          position: "relative",
+          // position: "relative",
           background: "#f7f7f7",
           height: "100%",
         }}
@@ -341,7 +357,7 @@ export default function Home() {
             display: "flex",
             overflow: "auto",
             border: "6px solid #ccc",
-            position: "relative",
+            // position: "relative",
             marginTop: "2px",
             background: "#f7f7f7",
             justifyContent: "center",
@@ -350,6 +366,7 @@ export default function Home() {
 
         {tooltip.show && (
           <div
+          id="tooltip-box"
             style={{
               position: "fixed",
               left: tooltip.x,
@@ -423,11 +440,12 @@ export default function Home() {
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(4, 1fr)",
-                    gap: "4px",
+                    gridTemplateColumns: "repeat(2, 1fr)",
+                    gap: "1px",
                     padding: "4px",
                     background: "#fff",
                     zIndex: 180,
+                    position: "relative",
                   }}
                 >
                   {groupedWords[letter].map((word) => (
@@ -442,9 +460,9 @@ export default function Home() {
                         background: "#FFCCCB",
                         padding: "2px 4px",
                       }}
-                      onClick={() => {
+                      onClick={(e) => {
                         setHighlightedWord(word);
-                        handleWordClick(word);
+                        handleWordClick(word,e);
                       }}
                     >
                       {word}
