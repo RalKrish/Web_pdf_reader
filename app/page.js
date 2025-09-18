@@ -1,103 +1,388 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useState } from "react";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [pdfjsLib, setPdfjsLib] = useState(null);
+  const [pdfFile, setPdfFile] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageWords, setPageWords] = useState([]); // words for current page
+  const [meanings, setMeanings] = useState({});
+  const [tooltip, setTooltip] = useState({ word: "", x: 0, y: 0, show: false });
+  const [pdfDoc, setPdfDoc] = useState(null);
+  const [highlightedWord, setHighlightedWord] = useState("");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js";
+    script.onload = () => {
+      setPdfjsLib(window.pdfjsLib);
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.worker.min.js";
+    };
+    document.body.appendChild(script);
+  }, []);
+
+  function handleFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file || file.type !== "application/pdf") {
+      alert("Please upload a valid PDF file.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function () {
+      const pdfData = new Uint8Array(reader.result);
+      if (pdfjsLib) loadPDF(pdfData);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // Add at the top, below imports
+  const STOP_WORDS = new Set([
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "but",
+    "if",
+    "in",
+    "on",
+    "at",
+    "for",
+    "with",
+    "by",
+    "to",
+    "of",
+    "he",
+    "she",
+    "it",
+    "they",
+    "him",
+    "her",
+    "his",
+    "hers",
+    "them",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "shall",
+    "should",
+    "can",
+    "could",
+    "may",
+    "might",
+    "must",
+    "also",
+    "so",
+    "some",
+    "any",
+    "all",
+    "this",
+    "that",
+    "these",
+    "those",
+    "from",
+    "as",
+    "not",
+    "no",
+    "into",
+    "up",
+    "down",
+    "out",
+    "about",
+    "over",
+    "under",
+    "again",
+    "further",
+    "then",
+    "once",
+    "here",
+    "there",
+    "when",
+    "where",
+    "why",
+    "how",
+    "very",
+    "more",
+    "most",
+    "such",
+    "own",
+    "same",
+    "other",
+    "than",
+    "too",
+    "just",
+    "like",
+    "over",
+    "after",
+    "before",
+    "between",
+    "each",
+    "because",
+    "while",
+    "during",
+    "above",
+    "below",
+    "off",
+    "now",
+    "only",
+    "ever",
+    "never",
+    "both",
+    "few",
+    "many",
+    "much",
+    "another",
+    "anyone",
+    "every",
+    "everyone",
+    "everything",
+    "someone",
+    "something",
+    "nothing",
+    "something",
+    "nothing",
+    "everybody",
+    "someone",
+    "anybody",
+    "who",
+    "whom",
+    "whose",
+    "which",
+    "what",
+    "where",
+    "when",
+    "why",
+    "how",
+  ]);
+
+  async function loadPDF(data) {
+    const doc = await pdfjsLib.getDocument({ data }).promise;
+    setPdfDoc(doc);
+    renderPage(doc, 1); // render first page
+  }
+
+  async function renderPage(doc, pageNum) {
+    const page = await doc.getPage(pageNum);
+    setCurrentPage(pageNum);
+    const viewport = page.getViewport({ scale: 1.5 });
+
+    const container = document.getElementById("pdfContainer");
+    container.innerHTML = "";
+
+    const canvas = document.createElement("canvas");
+    canvas.id = "pdfCanvas";
+    const ctx = canvas.getContext("2d");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    container.appendChild(canvas);
+
+    // Extract text and words
+    const textContent = await page.getTextContent();
+    const wordsSet = new Set();
+
+    // Save positions for highlights
+    const wordPositions = [];
+
+    textContent.items.forEach((item) => {
+      const splitWords = item.str
+        .replace(/[^a-zA-Z0-9]/g, " ")
+        .split(" ")
+        .filter(Boolean)
+        .map((w) => w.toLowerCase())
+        .filter((w) => !STOP_WORDS.has(w)); // remove common words
+
+      splitWords.forEach((w) => wordsSet.add(w));
+
+      // Save positions for highlight
+      const transform = item.transform;
+      splitWords.forEach((w) => {
+        wordPositions.push({
+          word: w,
+          x: transform[4] * viewport.scale,
+          y: viewport.height - transform[5] * viewport.scale,
+          width: (item.width / splitWords.length) * viewport.scale,
+          height: item.height * viewport.scale,
+        });
+      });
+    });
+
+    setPageWords(Array.from(wordsSet).sort((a, b) => a.localeCompare(b)));
+
+    // Draw highlight if any
+    if (highlightedWord) {
+      highlightWordOnCanvas(highlightedWord, wordPositions, ctx);
+    }
+
+    // Attach word positions for future highlights
+    canvas.wordPositions = wordPositions;
+  }
+
+  function highlightWordOnCanvas(word, positions, ctx) {
+    positions.forEach((pos) => {
+      if (pos.word === word) {
+        ctx.fillStyle = "rgba(255,255,0,0.5)";
+        ctx.fillRect(pos.x, pos.y - pos.height, pos.width, pos.height);
+      }
+    });
+  }
+
+  function handleWordClick(word) {
+    const canvas = document.getElementById("pdfCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Re-render page to redraw canvas
+    renderPage(pdfDoc, currentPage);
+
+    // Highlight clicked word
+    const positions = canvas.wordPositions || [];
+    highlightWordOnCanvas(word, positions, ctx);
+
+    // Show tooltip
+    const rect = canvas.getBoundingClientRect();
+    setTooltip({
+      word,
+      x: rect.x + rect.width / 2,
+      y: rect.y + 20,
+      show: true,
+    });
+    if (!meanings[word]) fetchMeaning(word);
+  }
+
+  async function fetchMeaning(word) {
+    try {
+      const res = await fetch(`/api/lookup?word=${word}`);
+      const data = await res.json();
+      setMeanings((prev) => ({ ...prev, [word]: data.meaning || "Not found" }));
+    } catch {
+      setMeanings((prev) => ({ ...prev, [word]: "Error fetching meaning" }));
+    }
+  }
+
+  const nextPage = () => {
+    if (pdfDoc && currentPage < pdfDoc.numPages)
+      renderPage(pdfDoc, currentPage + 1);
+  };
+  const prevPage = () => {
+    if (pdfDoc && currentPage > 1) renderPage(pdfDoc, currentPage - 1);
+  };
+
+  return (
+    <div style={{ display: "flex", height: "90vh" }}>
+      <div style={{ flex: 2, position: "relative" }}>
+        <input
+          type="file"
+          accept="application/pdf"
+          onChange={handleFileUpload}
+        />
+        <div
+          style={{
+            marginTop: "10px",
+            background: "#f0f0f0",
+            display: "flex",
+            justifyContent: "center",
+          }}
+        >
+          <span style={{ marginLeft: "10px" }}>
+            Page: {currentPage}/{pdfDoc ? pdfDoc.numPages : 0}
+          </span>
+
+          <div className="ml-5 flex w-[200px] bg-amber-200 justify-around items-end">
+            <div>
+              <button onClick={prevPage} disabled={currentPage === 1}>
+                Prev
+              </button>
+            </div>
+            <div>
+              <button
+                onClick={nextPage}
+                disabled={pdfDoc && currentPage === pdfDoc.numPages}
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        <div
+          id="pdfContainer"
+          style={{
+            flex: 1,
+            overflow: "auto",
+            border: "1px solid #ccc",
+            position: "relative",
+            marginTop: "10px",
+          }}
+        ></div>
+
+        {tooltip.show && (
+          <div
+            style={{
+              position: "fixed",
+              left: tooltip.x,
+              top: tooltip.y,
+              background: "#fff",
+              border: "1px solid #333",
+              padding: "5px",
+              borderRadius: "4px",
+              zIndex: 1000,
+              maxWidth: "200px",
+              boxShadow: "0px 2px 5px rgba(0,0,0,0.3)",
+            }}
+          >
+            <strong>{tooltip.word}</strong>:{" "}
+            {meanings[tooltip.word] || "Loading..."}
+          </div>
+        )}
+      </div>
+
+      {/* Right side: page words in 4 cols, scrollable */}
+      <div
+        style={{
+          flex: 1,
+          border: "2px solid #888",
+          padding: "10px",
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: "2px",
+          overflowY: "auto",
+          height: "100vh",
+        }}
+      >
+        {pageWords.map((word) => (
+          <div
+            key={word}
+            style={{
+              border: "1px solid #ccc",
+              borderRadius: "3px",
+              textAlign: "start",
+              cursor: "pointer",
+              background: "#f7f7f7",
+            }}
+            onClick={() => {
+              setHighlightedWord(word);
+              handleWordClick(word);
+            }}
+          >
+            {word}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
